@@ -1,0 +1,12 @@
+black
+flake8
+isort
+mkdocs
+python-dotenv
+diffusers==0.32.2
+flax==0.10.4
+jax==0.4.38
+numpy==2.2.4
+torch==2.2.2
+torchvision==0.17.2
+transformers==4.50.3
