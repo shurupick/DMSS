@@ -5,11 +5,11 @@ from torch.utils.data import DataLoader, Dataset
 
 class PolypDataset(Dataset):
     def __init__(
-            self,
-            image_dir: str = None,
-            mask_dir: str = None,
-            transform=None,
-            mode: str = 'train'  # 'train', 'valid', 'test'
+        self,
+        image_dir: str = None,
+        mask_dir: str = None,
+        transform=None,
+        mode: str = "train",  # 'train', 'valid', 'test'
     ):
         pass
 
@@ -21,10 +21,10 @@ class PolypDataset(Dataset):
 
 
 def get_data_loaders(
-        data_dir: str = None,
-        transform=None,  # transforms.Compose([transforms.ToTensor()]) or None
-        batch_size: int = 16,
-        num_workers: int = 4
+    data_dir=None,
+    transform=None,  # transforms.Compose([transforms.ToTensor()]) or None
+    batch_size: int = 16,
+    num_workers: int = 4,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
     Data = PolypDataset()
@@ -34,21 +34,15 @@ def get_data_loaders(
     valid_dataset = PolypDataset
     test_dataset = PolypDataset
 
-    train_loader = DataLoader(train_dataset,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              num_workers=num_workers)
-    valid_loader = DataLoader(valid_dataset,
-                              batch_size=batch_size,
-                              shuffle=False,
-                              num_workers= num_workers)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+    )
+    valid_loader = DataLoader(
+        valid_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
 
-    test_loader = DataLoader(test_dataset,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers= num_workers)
+    test_loader = DataLoader(
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
 
     return train_loader, valid_loader, test_loader
-
-def tran_val_test_loaders():
-    pass
