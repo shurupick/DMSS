@@ -27,7 +27,7 @@ def get_data_loaders(
     num_workers: int = 4,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
-    Data = PolypDataset()
+    Data = PolypDataset()  # TODO: replace with actual dataset class
 
     """Returns a dataloader for the given dataset."""
     train_dataset = PolypDataset
