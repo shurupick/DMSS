@@ -1,9 +1,15 @@
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from typing import Tuple
+
+from torch.utils.data import DataLoader, Dataset
+
 
 class PolypDataset(Dataset):
     def __init__(
-        self,
+            self,
+            image_dir: str = None,
+            mask_dir: str = None,
+            transform=None,
+            mode: str = 'train'  # 'train', 'valid', 'test'
     ):
         pass
 
@@ -15,13 +21,34 @@ class PolypDataset(Dataset):
 
 
 def get_data_loaders(
-    dataset: Dataset,
-    batch_size: int = 16,
-    shuffle: bool = True,
-    num_workers: int = 4,
-) -> DataLoader:
-    """Returns a dataloader for the given dataset."""
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+        data_dir: str = None,
+        transform=None,  # transforms.Compose([transforms.ToTensor()]) or None
+        batch_size: int = 16,
+        num_workers: int = 4
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
-def tran_val_loaders():
+    Data = PolypDataset()
+
+    """Returns a dataloader for the given dataset."""
+    train_dataset = PolypDataset
+    valid_dataset = PolypDataset
+    test_dataset = PolypDataset
+
+    train_loader = DataLoader(train_dataset,
+                              batch_size=batch_size,
+                              shuffle=True,
+                              num_workers=num_workers)
+    valid_loader = DataLoader(valid_dataset,
+                              batch_size=batch_size,
+                              shuffle=False,
+                              num_workers= num_workers)
+
+    test_loader = DataLoader(test_dataset,
+                             batch_size=batch_size,
+                             shuffle=False,
+                             num_workers= num_workers)
+
+    return train_loader, valid_loader, test_loader
+
+def tran_val_test_loaders():
     pass
