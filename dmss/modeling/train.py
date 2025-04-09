@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import torch
 from torch.optim import Adam
+import albumentations as A
+from torchvision.transforms import v2
 
 from dmss.dataset import PolypDataset, get_data_loaders
 from dmss.models import PolypModel
@@ -22,7 +24,7 @@ class Config:
     shuffle = False  # Set to True if you want to shuffle the dataset during training
     learning_rate = 1e-3
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    data_path = {"train": (path,)}  # Path to your dataset
+    data_path = "/Users/macbook/Desktop/MagaDiplom/DMSS/data/external/data.csv"  # Path to your annotations
     # Add other configuration parameters as needed
 
 
@@ -39,14 +41,22 @@ def main(conf: Config):
         device=conf.device,
     )
 
-    model.to(config.device)
+    model.to(conf.device)
 
     # Add code to initialize the optimizer and data loaders
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
+    transforms = v2.Compose([
+        v2.Resize(640, 640),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
     train_loader, val_loader, test_loader = get_data_loaders(
-        data_dir=conf.data_path,
+        annotations_path=conf.data_path,
+        transform=transforms,
         batch_size=conf.batch_size,
         num_workers=conf.num_workers,
+        device=conf.device,
     )
 
 

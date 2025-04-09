@@ -2,7 +2,7 @@ from os import listdir, path
 
 import pandas as pd
 
-DATA_PATH = "../data/external/PolypGen2021_MultiCenterData_v3"
+DATA_PATH = "/Users/macbook/Desktop/MagaDiplom/DMSS/data/external/PolypGen2021_MultiCenterData_v3"
 
 
 def parse_image_folder(folder_path: str) -> pd.DataFrame:
@@ -23,10 +23,9 @@ def parse_image_folder(folder_path: str) -> pd.DataFrame:
         mask_dir = path.join(folder_path, f"data_C{fold+1}", f"masks_C{fold+1}")
 
         # List all files in the directory
-        for image_path, mask_path in zip(listdir(image_dir), listdir(mask_dir)):
-            if path.isfile(path.join(image_dir, image_path)) and path.isfile(
-                path.join(mask_dir, mask_path)
-            ):
+        for image_path in listdir(image_dir):
+            mask_path = image_path.replace(".jpg", "_mask.jpg")  # Assuming masks have the same name but .png extension
+            if path.isfile(path.join(image_dir, image_path)) and path.isfile(path.join(mask_dir, mask_path)):
                 image_paths_concat.append(path.join(image_dir, image_path))
                 mask_paths_concat.append(path.join(mask_dir, mask_path))
 
