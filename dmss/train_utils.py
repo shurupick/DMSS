@@ -1,10 +1,9 @@
 import os
 
+import segmentation_models_pytorch
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-import segmentation_models_pytorch
 
 
 class EarlyStopping:
@@ -27,7 +26,9 @@ class EarlyStopping:
         """
         self.best_fitness = 0.0  # i.e. mAP
         self.best_epoch = 0
-        self.patience = patience or float("inf")  # epochs to wait after fitness stops improving to stop
+        self.patience = patience or float(
+            "inf"
+        )  # epochs to wait after fitness stops improving to stop
         self.possible_stop = False  # possible stop may occur next epoch
 
     def __call__(self, epoch, fitness):
@@ -44,7 +45,9 @@ class EarlyStopping:
         if fitness is None:  # check if fitness=None (happens when val=False)
             return False
 
-        if fitness > self.best_fitness or self.best_fitness == 0:  # allow for early zero-fitness stage of training
+        if (
+            fitness > self.best_fitness or self.best_fitness == 0
+        ):  # allow for early zero-fitness stage of training
             self.best_epoch = epoch
             self.best_fitness = fitness
         delta = epoch - self.best_epoch  # epochs without improvement
@@ -53,17 +56,20 @@ class EarlyStopping:
 
         return stop
 
+
 class SegmentationTrainer:
-    def __init__(self,
-                 model: torch.nn.Module,
-                 train_loader: DataLoader,
-                 val_loader: DataLoader,
-                 loss_fn: segmentation_models_pytorch.losses,
-                 optimizer: torch.optim,
-                 scheduler: torch.optim.lr_scheduler,
-                 device: str = None,
-                 num_epochs: int = 10,
-                 patience: int = 50):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        loss_fn: segmentation_models_pytorch.losses,
+        optimizer: torch.optim,
+        scheduler: torch.optim.lr_scheduler,
+        device: str = None,
+        num_epochs: int = 10,
+        patience: int = 50,
+    ):
         """
         :param model: модель сегментации
         :param train_loader: DataLoader для обучающего набора
@@ -83,7 +89,7 @@ class SegmentationTrainer:
         self.num_epochs = num_epochs
         self.patience = patience
         self.stopper, self.stop = EarlyStopping(patience=self.patience), False
-        self.checkpoint_dir = '../models'
+        self.checkpoint_dir = "../models"
 
     def train_epoch(self):
         self.model.train()
@@ -106,7 +112,7 @@ class SegmentationTrainer:
             running_loss += loss.item()
 
             if (batch_idx + 1) % 10 == 0:
-                print(f'Batch: {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.4f}')
+                print(f"Batch: {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.4f}")
 
         epoch_loss = running_loss / len(self.train_loader)
         return epoch_loss
@@ -127,49 +133,53 @@ class SegmentationTrainer:
         return val_loss
 
     def train(self):
-        self.best_val_loss = float('inf')
-        self.checkpoint_dir = '../models'
+        self.best_val_loss = float("inf")
+        self.checkpoint_dir = "../models"
 
         for epoch in range(1, self.num_epochs + 1):
-            print(f'Epoch {epoch}/{self.num_epochs}:')
+            print(f"Epoch {epoch}/{self.num_epochs}:")
 
-            #------- Train -------
+            # ------- Train -------
             train_loss = self.train_epoch()
 
-            #------- Validate -------
+            # ------- Validate -------
             final_epoch = epoch + 1 >= self.num_epochs
             val_loss = self.validate()
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
-                self._save_model('best')
-                print(f'Best validation loss updated to {val_loss:.4f}')
+                self._save_model("best")
+                print(f"Best validation loss updated to {val_loss:.4f}")
 
             self.stop |= self.stopper(epoch + 1, val_loss)
 
-            #------- Save model -------
+            # ------- Save model -------
             if final_epoch:
-                self._save_model('last')
-                print(f'Final epoch reached. Model saved.')
+                self._save_model("last")
+                print(f"Final epoch reached. Model saved.")
 
-            #------- Early stopping -------
+            # ------- Early stopping -------
             if self.stop:
-                print('Early stopping triggered.')
+                print("Early stopping triggered.")
                 break
 
-
-            print(f'Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n')
+            print(
+                f"Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n"
+            )
 
     def _save_model(self, mode: str):
         """
         mode: 'best' or 'last'
         """
-        if mode == 'best':
-            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, 'best/best_model.pth'))
-            print(f'Best model saved.')
-        elif mode == 'last':
-            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, 'last/last_model.pth'))
-            print(f'Final epoch reached. Last model saved.')
-
+        if mode == "best":
+            torch.save(
+                self.model.state_dict(), os.path.join(self.checkpoint_dir, "best/best_model.pth")
+            )
+            print(f"Best model saved.")
+        elif mode == "last":
+            torch.save(
+                self.model.state_dict(), os.path.join(self.checkpoint_dir, "last/last_model.pth")
+            )
+            print(f"Final epoch reached. Last model saved.")
 
     def _setup_dirs(self):
         """

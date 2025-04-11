@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 import os
 
+from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
 from torchvision.transforms import v2
-from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
 from dmss.train_utils import SegmentationTrainer
-
 
 
 # ----------------------------
@@ -31,12 +30,12 @@ class Config:
     num_workers = 4
     data_path = os.path.join(project_dir, "data/external/data.csv")  # Path to your annotations
 
-    #---------- Training parameters------------
+    # ---------- Training parameters------------
     learning_rate = 1e-3
     device = "cuda" if torch.cuda.is_available() else "cpu"
     patience = 10  # Patience for early stopping
 
-    #---------- Loss parameters----------------
+    # ---------- Loss parameters----------------
     alpha = 1.0
     beta = 1.0
 
@@ -56,13 +55,15 @@ def main(conf: Config):
     # Add code to initialize the optimizer and data loaders
     optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
     # noinspection PyTypeChecker
-    loss = conf.alpha*DiceLoss(mode='binary') + conf.beta*SoftBCEWithLogitsLoss()
+    loss = conf.alpha * DiceLoss(mode="binary") + conf.beta * SoftBCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=5)
 
-    transforms = v2.Compose([
-        v2.Resize(size=(640, 640)),
-        v2.ToDtype(torch.float32, scale=True),
-    ])
+    transforms = v2.Compose(
+        [
+            v2.Resize(size=(640, 640)),
+            v2.ToDtype(torch.float32, scale=True),
+        ]
+    )
 
     train_loader, val_loader, test_loader = get_data_loaders(
         annotations_path=conf.data_path,
@@ -83,7 +84,6 @@ def main(conf: Config):
         patience=conf.patience,
     )
     trainer.train()
-
 
 
 if __name__ == "__main__":

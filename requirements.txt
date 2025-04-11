@@ -1,7 +1,12 @@
-albumentations==2.0.5
-opencv_python==4.11.0.86
+black==25.1.0
+clearml==1.18.0
+efficientnet_pytorch==0.7.1
+flake8==7.2.0
+numpy==1.25.2
+opencv-python==4.11.0.86
 pandas==2.2.3
+python-dotenv==1.1.0
 segmentation_models_pytorch==0.4.0
+timm==1.0.15
 torch==2.2.2
 torchvision==0.17.2
-tqdm==4.67.1

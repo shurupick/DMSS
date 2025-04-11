@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.transforms import v2
 
+
 ####################
 # Dataset Class
 ####################
@@ -42,7 +43,7 @@ class PolypDataset(Dataset):
 
         # Load image and mask from paths
         image = cv.imread(img_path)
-        mask = cv.imread(mask_path, 0)    # Load mask in grayscale mode
+        mask = cv.imread(mask_path, 0)  # Load mask in grayscale mode
 
         image = torch.tensor(image).to(self.device)
         mask = torch.tensor(mask).to(self.device)
@@ -52,14 +53,13 @@ class PolypDataset(Dataset):
 
         # Apply transformations if any
         if self.transform:
-            image = self.transform(image) # Ensure image is on the correct device
-            mask = self.transform(mask) # Ensure mask is on the correct device
+            image = self.transform(image)  # Ensure image is on the correct device
+            mask = self.transform(mask)  # Ensure mask is on the correct device
 
         image = self.image_normalize(image)  # Normalize image tensor
-        mask = self.mask_normalize(mask)     # Normalize mask tensor
+        mask = self.mask_normalize(mask)  # Normalize mask tensor
 
         return image, mask
-
 
 
 ############################################
@@ -70,13 +70,12 @@ def get_data_loaders(
     transform=None,  # transforms.Compose([transforms.ToTensor()]) or None
     batch_size: int = 16,
     num_workers: int = 4,
-    device: str = 'cuda'
+    device: str = "cuda",
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
-
     """Returns a dataloader for the given dataset."""
     main_dataset = PolypDataset(annotations_path, transform=transform, device=device)
 
-    #indicies dataset
+    # indicies dataset
     size_dataset = len(main_dataset)
     indices = list(range(size_dataset))
     split1 = int(0.8 * size_dataset)  # 80% for training
@@ -86,29 +85,20 @@ def get_data_loaders(
     val_indices = indices[split1:split2]
     test_indices = indices[split2:]
 
-    #Split data
+    # Split data
     train_dataset = Subset(main_dataset, train_indices)
     val_dataset = Subset(main_dataset, val_indices)
     test_dataset = Subset(main_dataset, test_indices)
     print(main_dataset[0])
     train_data_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
     val_data_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
 
     test_data_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
 
     return train_data_loader, val_data_loader, test_data_loader
@@ -121,10 +111,12 @@ if __name__ == "__main__":
     # Example usage
     annotations_file_path = "../data/external/data.csv"
 
-    transforms = v2.Compose([
-        v2.Resize(size=(640, 640)),
-        v2.ToDtype(torch.float32, scale=True),
-    ])
+    transforms = v2.Compose(
+        [
+            v2.Resize(size=(640, 640)),
+            v2.ToDtype(torch.float32, scale=True),
+        ]
+    )
 
     train_loader, val_loader, test_loader = get_data_loaders(
         annotations_path=annotations_file_path,
@@ -133,4 +125,3 @@ if __name__ == "__main__":
         num_workers=2,
         device="cpu",
     )
-
