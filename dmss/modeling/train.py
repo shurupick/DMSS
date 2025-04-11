@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import os
+import string
+import random
 
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
@@ -38,6 +40,15 @@ class Config:
     # ---------- Loss parameters----------------
     alpha = 1.0
     beta = 1.0
+
+def generate_random_string(length):
+    # Объединяем все буквы (строчные и прописные) и цифры
+    characters = string.ascii_letters + string.digits
+    # Генерируем строку заданной длины
+    random_string = ''.join(random.choice(characters) for _ in range(length))
+    return random_string
+
+# Пример использования: генерируем строку длиной 10 символов
 
 
 def main(conf: Config):
@@ -83,9 +94,12 @@ def main(conf: Config):
         num_epochs=conf.epochs,
         patience=conf.patience,
     )
+    task_id = generate_random_string(20)
+
     trainer.train()
 
 
 if __name__ == "__main__":
     config = Config()
     main(config)
+
