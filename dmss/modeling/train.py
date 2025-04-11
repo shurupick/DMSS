@@ -8,7 +8,7 @@ import torch
 from torchvision.transforms import v2
 from clearml import Task, Logger
 
-from dmss.dataset import get_data_loaders
+from dataset import get_data_loaders
 from dmss.models import PolypModel
 from dmss.train_utils import SegmentationTrainer
 
@@ -100,6 +100,7 @@ def main(conf: Config):
 
 
 if __name__ == "__main__":
+    print(os.getcwd())
     task_name = generate_random_string(20)
     task = Task.init(
         project_name='dmss',

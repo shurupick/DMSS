@@ -1,8 +1,9 @@
 from os import listdir, path
+import os
 
 import pandas as pd
 
-DATA_PATH = "../data/external/PolypGen2021_MultiCenterData_v3"
+DATA_PATH = "./data/external/PolypGen2021_MultiCenterData_v3"
 
 
 def parse_image_folder(folder_path: str) -> pd.DataFrame:
@@ -37,5 +38,6 @@ def parse_image_folder(folder_path: str) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
+    print(os.getcwd())
     df_images = parse_image_folder(DATA_PATH)
-    df_images.to_csv("../data/external/data.csv", index=False)
+    df_images.to_csv("./data/external/data.csv", index=False)
