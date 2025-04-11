@@ -89,7 +89,7 @@ class SegmentationTrainer:
         self.num_epochs = num_epochs
         self.patience = patience
         self.stopper, self.stop = EarlyStopping(patience=self.patience), False
-        self.checkpoint_dir = "../models"
+        self.checkpoint_dir = "./models"
 
     def train_epoch(self):
         self.model.train()
@@ -134,7 +134,6 @@ class SegmentationTrainer:
 
     def train(self):
         self.best_val_loss = float("inf")
-        self.checkpoint_dir = "../models"
 
         for epoch in range(1, self.num_epochs + 1):
             print(f"Epoch {epoch}/{self.num_epochs}:")
@@ -190,3 +189,4 @@ class SegmentationTrainer:
         # self.best_checkpoint_dir = f'{self.checkpoint_dir}/best'
         # self.last_checkpoint_dir = f'{self.checkpoint_dir}/last'
         pass
+

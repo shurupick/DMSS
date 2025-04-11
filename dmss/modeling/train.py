@@ -2,13 +2,17 @@ from dataclasses import dataclass
 import os
 import string
 import random
+import sys
+
+# root_dir = os.path.dirname(os.path.dirname(os.getcwd()))
+# sys.path.append(root_dir)
 
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
 from torchvision.transforms import v2
 from clearml import Task, Logger
 
-from dataset import get_data_loaders
+from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
 from dmss.train_utils import SegmentationTrainer
 
@@ -19,7 +23,7 @@ from dmss.train_utils import SegmentationTrainer
 @dataclass
 class Config:
     # ---------- General parameters------------
-    project_dir = os.path.dirname(os.path.dirname(os.getcwd()))
+    project_dir = os.path.dirname(os.getcwd())
 
     # ---------- Model parameters------------
     arch = "Unet"
@@ -31,7 +35,7 @@ class Config:
     epochs = 50
     batch_size = 32
     num_workers = 4
-    data_path = os.path.join(project_dir, "data/external/data.csv")  # Path to your annotations
+    data_path = os.path.join(project_dir, "DMSS/data/external/data.csv")  # Path to your annotations
 
     # ---------- Training parameters------------
     learning_rate = 1e-3
@@ -50,6 +54,27 @@ def generate_random_string(length):
     return random_string
 
 # Пример использования: генерируем строку длиной 10 символов
+class CombinedLoss(torch.nn.Module):
+    def __init__(self, alpha=1.0, beta=1.0):
+        """
+        :param alpha: вес для Dice Loss
+        :param beta: вес для SoftBCEWithLogitsLoss
+        :param mode: режим для DiceLoss
+        :param smooth: параметр сглаживания для DiceLoss
+        """
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.dice_loss = DiceLoss(mode='binary')
+        self.soft_bce_loss = SoftBCEWithLogitsLoss()
+
+    def forward(self, preds, targets):
+        # Вычисляем значения каждого лосса
+        loss_dice = self.dice_loss(preds, targets)
+        loss_bce = self.soft_bce_loss(preds, targets)
+        # Возвращаем взвешенную сумму
+        total_loss = self.alpha * loss_dice + self.beta * loss_bce
+        return total_loss
 
 
 def main(conf: Config):
@@ -67,8 +92,14 @@ def main(conf: Config):
     # Add code to initialize the optimizer and data loaders
     optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
     # noinspection PyTypeChecker
-    loss = conf.alpha * DiceLoss(mode="binary") + conf.beta * SoftBCEWithLogitsLoss()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=5)
+    loss = CombinedLoss(alpha=conf.alpha, beta=conf.beta)
+    # conf.alpha * DiceLoss(mode="binary") + conf.beta * SoftBCEWithLogitsLoss()
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer,
+        T_0=10,          # Длина начального цикла (в шагах)
+        T_mult=1,        # Увеличение длины цикла после каждого перезапуска
+        eta_min=1e-7,    # Минимальный learning rate
+        )
 
     transforms = v2.Compose(
         [

@@ -45,8 +45,8 @@ class PolypDataset(Dataset):
         image = cv.imread(img_path)
         mask = cv.imread(mask_path, 0)  # Load mask in grayscale mode
 
-        image = torch.tensor(image).to(self.device)
-        mask = torch.tensor(mask).to(self.device)
+        image = torch.tensor(image)
+        mask = torch.tensor(mask)
 
         image = image.permute(2, 0, 1)
         mask = mask.unsqueeze(0)
@@ -89,7 +89,6 @@ def get_data_loaders(
     train_dataset = Subset(main_dataset, train_indices)
     val_dataset = Subset(main_dataset, val_indices)
     test_dataset = Subset(main_dataset, test_indices)
-    print(main_dataset[0])
     train_data_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
