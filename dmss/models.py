@@ -28,6 +28,6 @@ class PolypModel(nn.Module):
 
     def forward(self, image):
         # normalize image here
-        image = (image - self.mean) / self.std
+        # image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask

@@ -2,7 +2,7 @@ from os import listdir, path
 
 import pandas as pd
 
-DATA_PATH = "/Users/macbook/Desktop/MagaDiplom/DMSS/data/external/PolypGen2021_MultiCenterData_v3"
+DATA_PATH = "../data/external/PolypGen2021_MultiCenterData_v3"
 
 
 def parse_image_folder(folder_path: str) -> pd.DataFrame:
