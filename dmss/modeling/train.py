@@ -6,6 +6,7 @@ import random
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
 from torchvision.transforms import v2
+from clearml import Task, Logger
 
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
@@ -94,12 +95,17 @@ def main(conf: Config):
         num_epochs=conf.epochs,
         patience=conf.patience,
     )
-    task_id = generate_random_string(20)
 
     trainer.train()
 
 
 if __name__ == "__main__":
+    task_name = generate_random_string(20)
+    task = Task.init(
+        project_name='dmss',
+        task_name=task_name,
+    )
     config = Config()
     main(config)
+    task.close()
 
