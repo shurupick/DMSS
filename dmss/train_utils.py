@@ -1,7 +1,11 @@
 import os
 
-import segmentation_models_pytorch
+from clearml import Logger, Task
+import matplotlib.pyplot as plt
+import numpy as np
+import segmentation_models_pytorch as smp
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -57,18 +61,56 @@ class EarlyStopping:
         return stop
 
 
+def visualize(output_dir, image_filename, **images):
+    """PLot images in one row."""
+    n = len(images)
+    plt.figure(figsize=(16, 5))
+    for i, (name, image) in enumerate(images.items()):
+        plt.subplot(1, n, i + 1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.title(" ".join(name.split("_")).title())
+        plt.imshow(image)
+
+    plt.show()
+    plt.savefig(os.path.join(output_dir, image_filename))
+    plt.close()
+
+
+def _calculate_metrics(tp, fp, fn, tn):
+    tp = (torch.tensor([tp]),)
+    fp = (torch.tensor([fp]),)
+    fn = (torch.tensor([fn]),)
+    tn = torch.tensor([tn])
+
+    iou_score = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
+    f1_score = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
+    recall = smp.metrics.sensitivity(tp, fp, fn, tn, reduction="micro")
+    precision = smp.metrics.positive_predictive_value(tp, fp, fn, tn, reduction="micro")
+    accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
+
+    return {
+        "iou_score": iou_score,
+        "f1_score": f1_score,
+        "recall": recall,
+        "precision": precision,
+        "accuracy": accuracy,
+    }
+
+
 class SegmentationTrainer:
     def __init__(
         self,
         model: torch.nn.Module,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        loss_fn: segmentation_models_pytorch.losses,
+        loss_fn: smp.losses,
         optimizer: torch.optim,
         scheduler: torch.optim.lr_scheduler,
         device: str = None,
         num_epochs: int = 10,
         patience: int = 50,
+        logger: Logger = None,
     ):
         """
         :param model: модель сегментации
@@ -90,6 +132,8 @@ class SegmentationTrainer:
         self.patience = patience
         self.stopper, self.stop = EarlyStopping(patience=self.patience), False
         self.checkpoint_dir = "./models"
+        self.logger = logger if logger else None
+        self.output_dir = "./reports"
 
     def train_epoch(self):
         self.model.train()
@@ -99,13 +143,11 @@ class SegmentationTrainer:
             # Переносим данные на выбранное устройство
             images = images.to(self.device)
             masks = masks.to(self.device)
-
             self.optimizer.zero_grad()
             # Получаем предсказания модели. Выход имеет размер [B, num_classes, H, W]
             outputs = self.model(images)
             # Для CrossEntropyLoss ожидаются выходы с размером [B, num_classes, H, W] и маски [B, H, W]
             loss = self.loss_fn(outputs, masks)
-
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
@@ -120,6 +162,7 @@ class SegmentationTrainer:
     def validate(self):
         self.model.eval()
         running_loss = 0.0
+        tp, fp, fn, tn = 0, 0, 0, 0
 
         with torch.no_grad():
             for images, masks in self.val_loader:
@@ -127,7 +170,31 @@ class SegmentationTrainer:
                 masks = masks.to(self.device)
                 outputs = self.model(images)
                 loss = self.loss_fn(outputs, masks)
+
+                for i, output in enumerate(outputs):
+                    input = images[i].cpu().numpy().transpose(1, 2, 0)
+                    output = output.squeeze().cpu().numpy()
+
+                    visualize(
+                        self.output_dir,
+                        f"output_{i}.png",
+                        input_image=input,
+                        output_mask=output,
+                        binary_mask=output > 0.5,
+                    )
+
                 running_loss += loss.item()
+
+                prob_mask = outputs.sigmoid().squeeze(1)
+                pred_mask = (prob_mask > 0.5).long()
+                batch_tp, batch_fp, batch_fn, batch_tn = smp.metrics.get_stats(
+                    pred_mask, masks, mode="binary"
+                )
+
+                tp += batch_tp.sum().item()
+                fp += batch_fp.sum().item()
+                fn += batch_fn.sum().item()
+                tn += batch_tn.sum().item()
 
         val_loss = running_loss / len(self.val_loader)
         return val_loss
@@ -144,7 +211,9 @@ class SegmentationTrainer:
             # ------- Validate -------
             final_epoch = epoch + 1 >= self.num_epochs
             val_loss = self.validate()
-            if val_loss < self.best_val_loss:
+            if (
+                val_loss < self.best_val_loss
+            ):  # Остановку может быть стоит делать не по лоссу, а по метрике
                 self.best_val_loss = val_loss
                 self._save_model("best")
                 print(f"Best validation loss updated to {val_loss:.4f}")
@@ -170,11 +239,13 @@ class SegmentationTrainer:
         mode: 'best' or 'last'
         """
         if mode == "best":
+            os.makedirs(os.path.join(self.checkpoint_dir, "best"), exist_ok=True)
             torch.save(
                 self.model.state_dict(), os.path.join(self.checkpoint_dir, "best/best_model.pth")
             )
             print(f"Best model saved.")
         elif mode == "last":
+            os.makedirs(os.path.join(self.checkpoint_dir, "last"), exist_ok=True)
             torch.save(
                 self.model.state_dict(), os.path.join(self.checkpoint_dir, "last/last_model.pth")
             )
@@ -189,4 +260,3 @@ class SegmentationTrainer:
         # self.best_checkpoint_dir = f'{self.checkpoint_dir}/best'
         # self.last_checkpoint_dir = f'{self.checkpoint_dir}/last'
         pass
-
