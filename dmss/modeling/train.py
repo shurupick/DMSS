@@ -1,16 +1,13 @@
 from dataclasses import dataclass
 import os
-import string
 import random
+import string
 import sys
 
-# root_dir = os.path.dirname(os.path.dirname(os.getcwd()))
-# sys.path.append(root_dir)
-
+from clearml import Logger, Task
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
 from torchvision.transforms import v2
-from clearml import Task, Logger
 
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
@@ -35,7 +32,9 @@ class Config:
     epochs = 50
     batch_size = 32
     num_workers = 4
-    data_path = os.path.join(project_dir, "DMSS/data/external/data.csv")  # Path to your annotations
+    data_path = os.path.join(
+        project_dir, "DMSS/data/external/data.csv"
+    )  # Path to your annotations
 
     # ---------- Training parameters------------
     learning_rate = 1e-3
@@ -46,12 +45,14 @@ class Config:
     alpha = 1.0
     beta = 1.0
 
+
 def generate_random_string(length):
     # Объединяем все буквы (строчные и прописные) и цифры
     characters = string.ascii_letters + string.digits
     # Генерируем строку заданной длины
-    random_string = ''.join(random.choice(characters) for _ in range(length))
+    random_string = "".join(random.choice(characters) for _ in range(length))
     return random_string
+
 
 # Пример использования: генерируем строку длиной 10 символов
 class CombinedLoss(torch.nn.Module):
@@ -65,7 +66,7 @@ class CombinedLoss(torch.nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-        self.dice_loss = DiceLoss(mode='binary')
+        self.dice_loss = DiceLoss(mode="binary")
         self.soft_bce_loss = SoftBCEWithLogitsLoss()
 
     def forward(self, preds, targets):
@@ -77,7 +78,7 @@ class CombinedLoss(torch.nn.Module):
         return total_loss
 
 
-def main(conf: Config):
+def main(conf: Config, logger: Logger):
     # Initialize model, optimizer, and data loaders
     model = PolypModel(
         arch=conf.arch,
@@ -96,10 +97,14 @@ def main(conf: Config):
     # conf.alpha * DiceLoss(mode="binary") + conf.beta * SoftBCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
-        T_0=10,          # Длина начального цикла (в шагах)
-        T_mult=1,        # Увеличение длины цикла после каждого перезапуска
-        eta_min=1e-7,    # Минимальный learning rate
-        )
+        T_0=10,  # Длина начального цикла (в шагах)
+        T_mult=1,  # Увеличение длины цикла после каждого перезапуска
+        eta_min=1e-7,  # Минимальный learning rate
+    )
+
+    logger.report_text(
+        "Optimizer Name", (optimizer.__class__.__name__)
+    )  # TODO: дописать логирование mlclear
 
     transforms = v2.Compose(
         [
@@ -134,10 +139,13 @@ if __name__ == "__main__":
     print(os.getcwd())
     task_name = generate_random_string(20)
     task = Task.init(
-        project_name='dmss',
+        project_name="dmss",
         task_name=task_name,
     )
+    logger = task.get_logger()
     config = Config()
-    main(config)
+    task.connect(config)
+    main(config, logger)
+    print("Training completed.")
+    print(f"Task {task_name} has been closed.")
     task.close()
-
