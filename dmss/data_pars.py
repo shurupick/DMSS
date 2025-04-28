@@ -4,7 +4,9 @@ from os import listdir, path
 import pandas as pd
 
 # DATA_PATH = "../data/external/PolypGen2021_MultiCenterData_v3"
-DATA_PATH = os.path.join(os.path.dirname(os.getcwd()), "data/external/PolypGen2021_MultiCenterData_v3")
+DATA_PATH = os.path.join(
+    os.path.dirname(os.getcwd()), "data/external/PolypGen2021_MultiCenterData_v3"
+)
 
 
 def parse_image_folder(folder_path: str) -> pd.DataFrame:

@@ -25,7 +25,7 @@ class Config:
     # ---------- Model parameters------------
     arch: str = "Unet"
     encoder_name: str = "resnet34"
-    in_channels: int  = 3
+    in_channels: int = 3
     out_classes: int = 1
 
     # ---------- Dataset parameters------------

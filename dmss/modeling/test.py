@@ -1,7 +1,8 @@
 from train import Config
+
 from dmss.models import PolypModel
 
-#--------Algotithm-----------
+# --------Algotithm-----------
 # 1. Инициализировать модель
 # 2. Загрузить веса модели
 # 3. загрузить тестовый датасет
@@ -13,10 +14,9 @@ from dmss.models import PolypModel
 
 conf = Config()
 model = PolypModel(
-        arch=conf.arch,
-        encoder_name=conf.encoder_name,
-        in_channels=conf.in_channels,
-        out_classes=conf.out_classes,
-        device=conf.device,
-    )
-
+    arch=conf.arch,
+    encoder_name=conf.encoder_name,
+    in_channels=conf.in_channels,
+    out_classes=conf.out_classes,
+    device=conf.device,
+)

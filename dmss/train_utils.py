@@ -76,8 +76,7 @@ def visualize(output_dir, image_filename, **images):
     plt.savefig(os.path.join(output_dir, image_filename))
     plt.close()
     # это работать скорее всего не будет. В ноутбуке лежит новая версия отображения
-    #Надо встроить ее и логировать валидацию
-
+    # Надо встроить ее и логировать валидацию
 
 
 def _calculate_metrics(tp, fp, fn, tn):
@@ -100,16 +99,18 @@ def _calculate_metrics(tp, fp, fn, tn):
         "accuracy": accuracy,
     }
 
+
 def log_metrics_to_clearml(metrics: dict, epoch: int, logger: Logger):
     for metric_name, value in metrics.items():
         if torch.is_tensor(value):
             value = value.item()  # превращаем в float
         logger.report_scalar(
-            title="Validation metrics",      # это название группы графиков
-            series='epoch',         # подпись линии/сериала
-            value=value,            # само значение
-            iteration=epoch         # номер эпохи
+            title="Validation metrics",  # это название группы графиков
+            series="epoch",  # подпись линии/сериала
+            value=value,  # само значение
+            iteration=epoch,  # номер эпохи
         )
+
 
 class SegmentationTrainer:
     def __init__(
@@ -151,9 +152,11 @@ class SegmentationTrainer:
     def train_epoch(self):
         self.model.train()
         running_loss = 0.0
-        progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Train]")
+        progress_bar = tqdm(
+            self.train_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Train]"
+        )
         for images, masks in progress_bar:
-        # for batch_idx, (images, masks) in enumerate(self.train_loader):
+            # for batch_idx, (images, masks) in enumerate(self.train_loader):
             # Переносим данные на выбранное устройство
             images = images.to(self.device)
             masks = masks.to(self.device)
@@ -180,9 +183,11 @@ class SegmentationTrainer:
         tp, fp, fn, tn = 0, 0, 0, 0
 
         with torch.no_grad():
-            progress_bar = tqdm(self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]")
+            progress_bar = tqdm(
+                self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]"
+            )
             for images, masks in progress_bar:
-            # for images, masks in self.val_loader:
+                # for images, masks in self.val_loader:
                 images = images.to(self.device)
                 masks = masks.to(self.device)
                 outputs = self.model(images)
@@ -234,14 +239,9 @@ class SegmentationTrainer:
             final_epoch = epoch + 1 >= self.num_epochs
             val_loss, metrics = self.validate()
 
-
-            #--------Log losses--------
-            self.logger.report_scalar("Train", "loss",
-                                      iteration=self.epoch,
-                                      value=train_loss)
-            self.logger.report_scalar("Valid", "loss",
-                                      iteration=self.epoch,
-                                      value=val_loss)
+            # --------Log losses--------
+            self.logger.report_scalar("Train", "loss", iteration=self.epoch, value=train_loss)
+            self.logger.report_scalar("Valid", "loss", iteration=self.epoch, value=val_loss)
             log_metrics_to_clearml(metrics, self.epoch, self.logger)
 
             if (

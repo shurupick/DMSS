@@ -10,3 +10,4 @@ segmentation_models_pytorch
 torch
 torchvision
 synapseclient
+isort
