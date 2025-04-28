@@ -1,11 +1,9 @@
 import os
 
-from clearml import Logger, Task
+from clearml import Logger
 import matplotlib.pyplot as plt
-import numpy as np
 import segmentation_models_pytorch as smp
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -156,10 +154,8 @@ class SegmentationTrainer:
             self.train_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Train]"
         )
         for images, masks in progress_bar:
-            # for batch_idx, (images, masks) in enumerate(self.train_loader):
             # Переносим данные на выбранное устройство
-            images = images.to(self.device)
-            masks = masks.to(self.device)
+            images, masks = images.to(self.device), masks.to(self.device)
             self.optimizer.zero_grad()
             # Получаем предсказания модели. Выход имеет размер [B, num_classes, H, W]
             outputs = self.model(images)
@@ -187,10 +183,9 @@ class SegmentationTrainer:
                 self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]"
             )
             for images, masks in progress_bar:
-                # for images, masks in self.val_loader:
                 images = images.to(self.device)
                 masks = masks.to(self.device)
-                outputs = self.model(images)
+                outputs = self.model(images)# надо проверить правильно ли обрабатывается выход модели
                 loss = self.loss_fn(outputs, masks)
 
                 for i, output in enumerate(outputs):
@@ -229,7 +224,6 @@ class SegmentationTrainer:
         self.epoch = 0
 
         for epoch in range(1, self.num_epochs + 1):
-            # print(f"Epoch {epoch}/{self.num_epochs}:")
             self.epoch = epoch
 
             # ------- Train -------

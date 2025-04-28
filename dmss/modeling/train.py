@@ -79,7 +79,7 @@ class CombinedLoss(torch.nn.Module):
         return total_loss
 
 
-def main(conf: Config, curr_task: Task, logger: Logger):
+def main(conf: Config, curr_task: Task):
     # Initialize model, optimizer, and data loaders
     model = PolypModel(
         arch=conf.arch,
@@ -103,7 +103,7 @@ def main(conf: Config, curr_task: Task, logger: Logger):
         eta_min=1e-7,  # Минимальный learning rate
     )
 
-    curr_task.set_parameter("Otimizer", optimizer.__class__.__name__)
+    curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
     curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
 
     # logger.report_text(
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     logger = task.get_logger()
     config = Config()
     task.connect(config)
-    main(config, task, logger)
+    main(config, task)
     print("Training completed.")
     print(f"Task {task_name} has been closed.")
     task.close()
