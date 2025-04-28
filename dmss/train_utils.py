@@ -75,6 +75,9 @@ def visualize(output_dir, image_filename, **images):
     plt.show()
     plt.savefig(os.path.join(output_dir, image_filename))
     plt.close()
+    # это работать скорее всего не будет. В ноутбуке лежит новая версия отображения
+    #Надо встроить ее и логировать валидацию
+
 
 
 def _calculate_metrics(tp, fp, fn, tn):
@@ -97,6 +100,16 @@ def _calculate_metrics(tp, fp, fn, tn):
         "accuracy": accuracy,
     }
 
+def log_metrics_to_clearml(metrics: dict, epoch: int, logger: Logger):
+    for metric_name, value in metrics.items():
+        if torch.is_tensor(value):
+            value = value.item()  # превращаем в float
+        logger.report_scalar(
+            title="Validation metrics",      # это название группы графиков
+            series='epoch',         # подпись линии/сериала
+            value=value,            # само значение
+            iteration=epoch         # номер эпохи
+        )
 
 class SegmentationTrainer:
     def __init__(
@@ -104,7 +117,7 @@ class SegmentationTrainer:
         model: torch.nn.Module,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        loss_fn: smp.losses,
+        loss_fn: torch.nn.Module,
         optimizer: torch.optim,
         scheduler: torch.optim.lr_scheduler,
         device: str = None,
@@ -138,8 +151,9 @@ class SegmentationTrainer:
     def train_epoch(self):
         self.model.train()
         running_loss = 0.0
-
-        for batch_idx, (images, masks) in enumerate(self.train_loader):
+        progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Train]")
+        for images, masks in progress_bar:
+        # for batch_idx, (images, masks) in enumerate(self.train_loader):
             # Переносим данные на выбранное устройство
             images = images.to(self.device)
             masks = masks.to(self.device)
@@ -152,9 +166,10 @@ class SegmentationTrainer:
             self.optimizer.step()
             self.scheduler.step()
             running_loss += loss.item()
+            progress_bar.set_postfix(train_loss=running_loss / (progress_bar.n + 1e-7))
 
-            if (batch_idx + 1) % 10 == 0:
-                print(f"Batch: {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.4f}")
+            # if (batch_idx + 1) % 10 == 0:
+            #     print(f"Batch: {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.4f}")
 
         epoch_loss = running_loss / len(self.train_loader)
         return epoch_loss
@@ -165,7 +180,9 @@ class SegmentationTrainer:
         tp, fp, fn, tn = 0, 0, 0, 0
 
         with torch.no_grad():
-            for images, masks in self.val_loader:
+            progress_bar = tqdm(self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]")
+            for images, masks in progress_bar:
+            # for images, masks in self.val_loader:
                 images = images.to(self.device)
                 masks = masks.to(self.device)
                 outputs = self.model(images)
@@ -195,22 +212,38 @@ class SegmentationTrainer:
                 fp += batch_fp.sum().item()
                 fn += batch_fn.sum().item()
                 tn += batch_tn.sum().item()
+                progress_bar.set_postfix(val_loss=running_loss / (progress_bar.n + 1e-7))
+
+        metrics = _calculate_metrics(tp, fp, fn, tn)
 
         val_loss = running_loss / len(self.val_loader)
-        return val_loss
+        return val_loss, metrics
 
     def train(self):
         self.best_val_loss = float("inf")
+        self.epoch = 0
 
         for epoch in range(1, self.num_epochs + 1):
-            print(f"Epoch {epoch}/{self.num_epochs}:")
+            # print(f"Epoch {epoch}/{self.num_epochs}:")
+            self.epoch = epoch
 
             # ------- Train -------
             train_loss = self.train_epoch()
 
             # ------- Validate -------
             final_epoch = epoch + 1 >= self.num_epochs
-            val_loss = self.validate()
+            val_loss, metrics = self.validate()
+
+
+            #--------Log losses--------
+            self.logger.report_scalar("Train", "loss",
+                                      iteration=self.epoch,
+                                      value=train_loss)
+            self.logger.report_scalar("Valid", "loss",
+                                      iteration=self.epoch,
+                                      value=val_loss)
+            log_metrics_to_clearml(metrics, self.epoch, self.logger)
+
             if (
                 val_loss < self.best_val_loss
             ):  # Остановку может быть стоит делать не по лоссу, а по метрике
@@ -218,7 +251,7 @@ class SegmentationTrainer:
                 self._save_model("best")
                 print(f"Best validation loss updated to {val_loss:.4f}")
 
-            self.stop |= self.stopper(epoch + 1, val_loss)
+            self.stop |= self.stopper(epoch, val_loss)
 
             # ------- Save model -------
             if final_epoch:
@@ -250,13 +283,3 @@ class SegmentationTrainer:
                 self.model.state_dict(), os.path.join(self.checkpoint_dir, "last/last_model.pth")
             )
             print(f"Final epoch reached. Last model saved.")
-
-    def _setup_dirs(self):
-        """
-        import os
-        os.getcwd() - выводит абсолютный путь до проекта
-        '/Users/macbook/Desktop/MagaDiplom/DMSS'
-        """
-        # self.best_checkpoint_dir = f'{self.checkpoint_dir}/best'
-        # self.last_checkpoint_dir = f'{self.checkpoint_dir}/last'
-        pass

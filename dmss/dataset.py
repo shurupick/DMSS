@@ -61,7 +61,6 @@ class PolypDataset(Dataset):
 
         return image, mask
 
-
 ############################################
 # Return a dataloader for the given dataset.
 ############################################
@@ -101,6 +100,7 @@ def get_data_loaders(
     )
 
     return train_data_loader, val_data_loader, test_data_loader
+
 
 
 ################

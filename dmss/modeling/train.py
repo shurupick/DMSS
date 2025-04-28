@@ -20,30 +20,31 @@ from dmss.train_utils import SegmentationTrainer
 @dataclass
 class Config:
     # ---------- General parameters------------
-    project_dir = os.path.dirname(os.getcwd())
+    project_dir: str = os.path.dirname(os.path.dirname(os.getcwd()))
 
     # ---------- Model parameters------------
-    arch = "Unet"
-    encoder_name = "resnet34"
-    in_channels = 3
-    out_classes = 1
+    arch: str = "Unet"
+    encoder_name: str = "resnet34"
+    in_channels: int  = 3
+    out_classes: int = 1
 
     # ---------- Dataset parameters------------
-    epochs = 50
-    batch_size = 32
-    num_workers = 4
-    data_path = os.path.join(
-        project_dir, "DMSS/data/external/data.csv"
+    epochs: int = 50
+    batch_size: int = 16
+    num_workers: int = 4
+    data_path: str = os.path.join(
+        project_dir, "data/external/data.csv"
     )  # Path to your annotations
 
     # ---------- Training parameters------------
-    learning_rate = 1e-3
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    patience = 10  # Patience for early stopping
+    learning_rate: float = 1e-3
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "mps" if torch.backends.mps.is_available() else "cpu"
+    patience: int = 10  # Patience for early stopping
 
     # ---------- Loss parameters----------------
-    alpha = 1.0
-    beta = 1.0
+    alpha: float = 1.0
+    beta: float = 1.0
 
 
 def generate_random_string(length):
@@ -78,7 +79,7 @@ class CombinedLoss(torch.nn.Module):
         return total_loss
 
 
-def main(conf: Config, logger: Logger):
+def main(conf: Config, curr_task: Task, logger: Logger):
     # Initialize model, optimizer, and data loaders
     model = PolypModel(
         arch=conf.arch,
@@ -102,9 +103,12 @@ def main(conf: Config, logger: Logger):
         eta_min=1e-7,  # Минимальный learning rate
     )
 
-    logger.report_text(
-        "Optimizer Name", (optimizer.__class__.__name__)
-    )  # TODO: дописать логирование mlclear
+    curr_task.set_parameter("Otimizer", optimizer.__class__.__name__)
+    curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
+
+    # logger.report_text(
+    #     f"Optimizer Name {optimizer.__class__.__name__}"
+    # )  # TODO: дописать логирование clearml
 
     transforms = v2.Compose(
         [
@@ -145,7 +149,7 @@ if __name__ == "__main__":
     logger = task.get_logger()
     config = Config()
     task.connect(config)
-    main(config, logger)
+    main(config, task, logger)
     print("Training completed.")
     print(f"Task {task_name} has been closed.")
     task.close()
