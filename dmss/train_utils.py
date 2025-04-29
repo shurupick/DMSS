@@ -6,6 +6,7 @@ import segmentation_models_pytorch as smp
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import numpy as np
 
 
 class EarlyStopping:
@@ -145,7 +146,9 @@ class SegmentationTrainer:
         self.stopper, self.stop = EarlyStopping(patience=self.patience), False
         self.checkpoint_dir = "./models"
         self.logger = logger if logger else None
-        self.output_dir = "./reports"
+        self.output_dir = "./reports" #todo: проверить пути
+        self.mean = np.array([0.485, 0.456, 0.406])
+        self.std = np.array([0.229, 0.224, 0.225])
 
     def train_epoch(self):
         self.model.train()
@@ -189,8 +192,10 @@ class SegmentationTrainer:
                 loss = self.loss_fn(outputs, masks)
 
                 for i, output in enumerate(outputs):
-                    input = images[i].cpu().numpy().transpose(1, 2, 0)
-                    output = output.squeeze().cpu().numpy()
+                    # input = images[i].cpu().numpy().transpose(1, 2, 0)
+                    # output = output.squeeze(0).cpu().numpy()
+                    input = np.clip(images[i].cpu().numpy().transpose(1, 2, 0) * self.std + self.mean, 0, 1)
+                    output = np.clip(output.squeeze(0).cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5, 0, 1)
 
                     visualize(
                         self.output_dir,
