@@ -1,5 +1,6 @@
 # Data
 /data/
+/reports
 
 # Mac OS-specific storage files
 .DS_Store
@@ -38,6 +39,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 .idea/
+.vscode
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

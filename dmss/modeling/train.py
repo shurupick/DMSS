@@ -2,7 +2,6 @@ from dataclasses import dataclass
 import os
 import random
 import string
-import sys
 
 from clearml import Logger, Task
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
@@ -20,7 +19,8 @@ from dmss.train_utils import SegmentationTrainer
 @dataclass
 class Config:
     # ---------- General parameters------------
-    project_dir: str = os.path.dirname(os.path.dirname(os.getcwd()))
+    # project_dir: str = os.path.dirname(os.path.dirname(os.getcwd()))
+    project_dir: str = os.getcwd() #vscode
 
     # ---------- Model parameters------------
     arch: str = "Unet"
@@ -30,7 +30,7 @@ class Config:
 
     # ---------- Dataset parameters------------
     epochs: int = 50
-    batch_size: int = 16
+    batch_size: int = 8
     num_workers: int = 4
     data_path: str = os.path.join(
         project_dir, "data/external/data.csv"
@@ -38,8 +38,8 @@ class Config:
 
     # ---------- Training parameters------------
     learning_rate: float = 1e-3
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device: str = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device: str = "mps" if torch.backends.mps.is_available() else "cpu"
     patience: int = 10  # Patience for early stopping
 
     # ---------- Loss parameters----------------
@@ -80,6 +80,8 @@ class CombinedLoss(torch.nn.Module):
 
 
 def main(conf: Config, curr_task: Task):
+    logger = curr_task.get_logger()
+
     # Initialize model, optimizer, and data loaders
     model = PolypModel(
         arch=conf.arch,
@@ -134,6 +136,7 @@ def main(conf: Config, curr_task: Task):
         device=conf.device,
         num_epochs=conf.epochs,
         patience=conf.patience,
+        logger=logger
     )
 
     trainer.train()

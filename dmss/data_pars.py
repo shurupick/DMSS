@@ -23,8 +23,8 @@ def parse_image_folder(folder_path: str) -> pd.DataFrame:
     mask_paths_concat = []
 
     for fold in range(6):
-        image_dir = path.join(folder_path, f"data_C{fold+1}", f"images_C{fold+1}")
-        mask_dir = path.join(folder_path, f"data_C{fold+1}", f"masks_C{fold+1}")
+        image_dir = path.join(folder_path, f"data_C{fold + 1}", f"images_C{fold + 1}")
+        mask_dir = path.join(folder_path, f"data_C{fold + 1}", f"masks_C{fold + 1}")
 
         # List all files in the directory
         for image_path in listdir(image_dir):

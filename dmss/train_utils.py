@@ -61,27 +61,34 @@ class EarlyStopping:
 
 
 def visualize(output_dir, image_filename, **images):
-    """PLot images in one row."""
+    """
+    Plot and save a row of images.
+    Ключи **images: название→numpy-массив.
+    """
+    os.makedirs(output_dir, exist_ok=True)
     n = len(images)
-    plt.figure(figsize=(16, 5))
-    for i, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n, i + 1)
-        plt.xticks([])
-        plt.yticks([])
-        plt.title(" ".join(name.split("_")).title())
-        plt.imshow(image)
+    plt.figure(figsize=(5 * n, 5))
 
-    plt.show()
-    plt.savefig(os.path.join(output_dir, image_filename))
+    for idx, (name, img) in enumerate(images.items(), start=1):
+        ax = plt.subplot(1, n, idx)
+        ax.set_title(name.replace("_", " ").title())
+        ax.axis("off")
+
+        # если 2D — ставим градации серого
+        if img.ndim == 2:
+            plt.imshow(img, cmap="gray", vmin=0, vmax=1)
+        else:
+            plt.imshow(img)
+
+    save_path = os.path.join(output_dir, image_filename)
+    plt.savefig(save_path, bbox_inches="tight")
     plt.close()
-    # это работать скорее всего не будет. В ноутбуке лежит новая версия отображения
-    # Надо встроить ее и логировать валидацию
 
 
 def _calculate_metrics(tp, fp, fn, tn):
-    tp = (torch.tensor([tp]),)
-    fp = (torch.tensor([fp]),)
-    fn = (torch.tensor([fn]),)
+    tp = torch.tensor([tp])
+    fp = torch.tensor([fp])
+    fn = torch.tensor([fn])
     tn = torch.tensor([tn])
 
     iou_score = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
@@ -105,7 +112,7 @@ def log_metrics_to_clearml(metrics: dict, epoch: int, logger: Logger):
             value = value.item()  # превращаем в float
         logger.report_scalar(
             title="Validation metrics",  # это название группы графиков
-            series="epoch",  # подпись линии/сериала
+            series=metric_name,  # подпись линии/сериала
             value=value,  # само значение
             iteration=epoch,  # номер эпохи
         )
@@ -170,8 +177,6 @@ class SegmentationTrainer:
             running_loss += loss.item()
             progress_bar.set_postfix(train_loss=running_loss / (progress_bar.n + 1e-7))
 
-            # if (batch_idx + 1) % 10 == 0:
-            #     print(f"Batch: {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.4f}")
 
         epoch_loss = running_loss / len(self.train_loader)
         return epoch_loss
@@ -179,7 +184,7 @@ class SegmentationTrainer:
     def validate(self):
         self.model.eval()
         running_loss = 0.0
-        tp, fp, fn, tn = 0, 0, 0, 0
+        tp = fp = fn = tn = 0
 
         with torch.no_grad():
             progress_bar = tqdm(
@@ -187,42 +192,52 @@ class SegmentationTrainer:
             )
             for images, masks in progress_bar:
                 images = images.to(self.device)
-                masks = masks.to(self.device)
-                outputs = self.model(images)# надо проверить правильно ли обрабатывается выход модели
+                masks = masks.to(self.device)  # [-1,0,1] → мы исправим ниже
+                outputs = self.model(images)
                 loss = self.loss_fn(outputs, masks)
+                running_loss += loss.item()
 
-                for i, output in enumerate(outputs):
-                    # input = images[i].cpu().numpy().transpose(1, 2, 0)
-                    # output = output.squeeze(0).cpu().numpy()
-                    input = np.clip(images[i].cpu().numpy().transpose(1, 2, 0) * self.std + self.mean, 0, 1)
-                    output = np.clip(output.squeeze(0).cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5, 0, 1)
+                # подготовим ground-truth
+                masks = masks.clone()
+                masks[masks == -1] = 0
+                masks_int = masks.long().squeeze(1)  # [B,H,W]
+
+                # вероятностная карта и бинарная маска
+                prob_map = outputs.sigmoid().squeeze(1)  # [B,H,W]
+                pred_mask = (prob_map > 0.5).long()
+
+                # для каждого примера в батче — визуализация
+                for i in range(images.size(0)):
+                    # назад к HWC float [0,1]
+                    inp = images[i].cpu().numpy().transpose(1, 2, 0)
+                    inp = np.clip(inp * self.std + self.mean, 0, 1)
+
+                    prob = prob_map[i].cpu().numpy()           # H,W
+                    pred = pred_mask[i].cpu().numpy()          # H,W {0,1}
+                    true = masks_int[i].cpu().numpy()          # H,W {0,1}
 
                     visualize(
                         self.output_dir,
-                        f"output_{i}.png",
-                        input_image=input,
-                        output_mask=output,
-                        binary_mask=output > 0.5,
+                        f"epoch{self.epoch}_sample{i}.png",
+                        input_image=inp,
+                        prob_map=prob,
+                        pred_mask=pred,
+                        true_mask=true,
                     )
 
-                running_loss += loss.item()
-
-                prob_mask = outputs.sigmoid().squeeze(1)
-                pred_mask = (prob_mask > 0.5).long()
+                # подсчёт статистик
                 batch_tp, batch_fp, batch_fn, batch_tn = smp.metrics.get_stats(
-                    pred_mask, masks, mode="binary"
+                    pred_mask, masks_int, mode="binary"
                 )
-
                 tp += batch_tp.sum().item()
                 fp += batch_fp.sum().item()
                 fn += batch_fn.sum().item()
                 tn += batch_tn.sum().item()
+
                 progress_bar.set_postfix(val_loss=running_loss / (progress_bar.n + 1e-7))
 
         metrics = _calculate_metrics(tp, fp, fn, tn)
-
-        val_loss = running_loss / len(self.val_loader)
-        return val_loss, metrics
+        return running_loss / len(self.val_loader), metrics
 
     def train(self):
         self.best_val_loss = float("inf")
