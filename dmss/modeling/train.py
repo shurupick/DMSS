@@ -67,7 +67,7 @@ class CombinedLoss(torch.nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-        self.dice_loss = DiceLoss(mode="binary")
+        self.dice_loss = DiceLoss(mode="binary", from_logits=True)
         self.soft_bce_loss = SoftBCEWithLogitsLoss()
 
     def forward(self, preds, targets):
