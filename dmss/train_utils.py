@@ -2,11 +2,11 @@ import os
 
 from clearml import Logger
 import matplotlib.pyplot as plt
+import numpy as np
 import segmentation_models_pytorch as smp
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import numpy as np
 
 
 class EarlyStopping:
@@ -153,7 +153,7 @@ class SegmentationTrainer:
         self.stopper, self.stop = EarlyStopping(patience=self.patience), False
         self.checkpoint_dir = "./models"
         self.logger = logger if logger else None
-        self.output_dir = "./reports" #todo: проверить пути
+        self.output_dir = "./reports"  # todo: проверить пути
         self.mean = np.array([0.485, 0.456, 0.406])
         self.std = np.array([0.229, 0.224, 0.225])
 
@@ -166,17 +166,16 @@ class SegmentationTrainer:
         for images, masks in progress_bar:
             # Переносим данные на выбранное устройство
             images, masks = images.to(self.device), masks.to(self.device)
+            # print(images)
+            # print(masks)
             self.optimizer.zero_grad()
-            # Получаем предсказания модели. Выход имеет размер [B, num_classes, H, W]
             outputs = self.model(images)
-            # Для CrossEntropyLoss ожидаются выходы с размером [B, num_classes, H, W] и маски [B, H, W]
             loss = self.loss_fn(outputs, masks)
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
             running_loss += loss.item()
             progress_bar.set_postfix(train_loss=running_loss / (progress_bar.n + 1e-7))
-
 
         epoch_loss = running_loss / len(self.train_loader)
         return epoch_loss
@@ -212,9 +211,9 @@ class SegmentationTrainer:
                     inp = images[i].cpu().numpy().transpose(1, 2, 0)
                     inp = np.clip(inp * self.std + self.mean, 0, 1)
 
-                    prob = prob_map[i].cpu().numpy()           # H,W
-                    pred = pred_mask[i].cpu().numpy()          # H,W {0,1}
-                    true = masks_int[i].cpu().numpy()          # H,W {0,1}
+                    prob = prob_map[i].cpu().numpy()  # H,W
+                    pred = pred_mask[i].cpu().numpy()  # H,W {0,1}
+                    true = masks_int[i].cpu().numpy()  # H,W {0,1}
 
                     visualize(
                         self.output_dir,

@@ -6,7 +6,7 @@ import string
 from clearml import Logger, Task
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
-from torchvision.transforms import v2
+from torchvision.transforms import v2, InterpolationMode
 
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
@@ -37,8 +37,8 @@ class Config:
 
     # ---------- Training parameters------------
     learning_rate: float = 1e-3
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device: str = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device: str = "mps" if torch.backends.mps.is_available() else "cpu"
     patience: int = 10  # Patience for early stopping
 
     # ---------- Loss parameters----------------
@@ -73,6 +73,8 @@ class CombinedLoss(torch.nn.Module):
         # Вычисляем значения каждого лосса
         loss_dice = self.dice_loss(preds, targets)
         loss_bce = self.soft_bce_loss(preds, targets)
+        # print(f"Dice loss: {loss_dice}")
+        # print(f"BCE loss: {loss_bce}")
         # Возвращаем взвешенную сумму
         total_loss = self.alpha * loss_dice + self.beta * loss_bce
         return total_loss
@@ -105,16 +107,20 @@ def main(conf: Config, curr_task: Task):
     curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
     curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
 
-    transforms = v2.Compose(
-        [
-            v2.Resize(size=(640, 640)),
-            v2.ToDtype(torch.float32, scale=True),
-        ]
-    )
+    img_tf = v2.Compose([
+        v2.Resize((640, 640)),                   # билинейно
+        v2.ToDtype(torch.float32, scale=False), # мы уже поделили на 255 вручную
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    mask_tf = v2.Compose([
+        v2.Resize((640, 640), interpolation=InterpolationMode.NEAREST),
+        v2.ToDtype(torch.float32, scale=False)
+    ])
 
     train_loader, val_loader, test_loader = get_data_loaders(
         annotations_path=conf.data_path,
-        transform=transforms,
+        transform_image=img_tf,
+        transform_mask=mask_tf,
         batch_size=conf.batch_size,
         num_workers=conf.num_workers,
         device=conf.device,
@@ -129,7 +135,7 @@ def main(conf: Config, curr_task: Task):
         device=conf.device,
         num_epochs=conf.epochs,
         patience=conf.patience,
-        logger=logger
+        logger=logger,
     )
 
     trainer.train()

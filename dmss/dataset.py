@@ -15,14 +15,16 @@ class PolypDataset(Dataset):
     def __init__(
         self,
         annotations_file: str = None,
-        transform=None,
+        img_transform=None,
+        msk_transform=None,
         mode: str = "train",  # 'train', 'valid', 'test'
         device=None,  # 'cuda' or 'cpu'
     ):
         self.annotations_file = pd.read_csv(annotations_file)
         self.mode = mode  # 'train', 'valid', 'test'
         self.device = device  # 'cuda' or 'cpu'
-        self.transform = transform.to(self.device) if transform else None
+        self.img_tf = img_transform.to(self.device) if img_transform else None
+        self.mask_tf = msk_transform.to(self.device) if msk_transform else None
         self.image_normalize = v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.mask_normalize = v2.Normalize(mean=[0.5], std=[0.5])  # Assuming binary masks
 
@@ -42,23 +44,16 @@ class PolypDataset(Dataset):
             raise FileNotFoundError(f"The mask file {mask_path} does not exist.")
 
         # Load image and mask from paths
-        image = cv.imread(img_path)
-        mask = cv.imread(mask_path, 0)  # Load mask in grayscale mode
+        image = cv.imread(img_path, cv.COLOR_BGR2RGB)
+        mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)  # Load mask in grayscale mode
 
-        image = torch.tensor(image)
-        mask = torch.tensor(mask)
+        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+        mask = torch.from_numpy(mask).unsqueeze(0).float() / 255.0
 
-        image = image.permute(2, 0, 1)
-        mask = mask.unsqueeze(0)
-
-        # Apply transformations if any
-        if self.transform:
-            image = self.transform(image)  # Ensure image is on the correct device
-            mask = self.transform(mask)  # Ensure mask is on the correct device
-
-        image = self.image_normalize(image)  # Normalize image tensor
-        mask = self.mask_normalize(mask)  # Normalize mask tensor
-
+        if self.img_tf:
+            image = self.img_tf(image)
+        if self.mask_tf:
+            mask = self.mask_tf(mask)
         return image, mask
 
 
@@ -67,24 +62,29 @@ class PolypDataset(Dataset):
 ############################################
 def get_data_loaders(
     annotations_path: str = None,
-    transform=None,  # transforms.Compose([transforms.ToTensor()]) or None
+    transform_image=None,  # transforms.Compose([transforms.ToTensor()]) or None
+    transform_mask=None,
     batch_size: int = 16,
     num_workers: int = 4,
     device: str = "cuda",
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Returns a dataloader for the given dataset."""
-    main_dataset = PolypDataset(annotations_path, transform=transform, device=device)
+
+    main_dataset = PolypDataset(
+        annotations_path,
+        img_transform=transform_image,
+        msk_transform=transform_mask,
+        device=device,
+    )
 
     # indicies dataset
     size_dataset = len(main_dataset)
     indices = list(range(size_dataset))
-    # split1 = int(0.8 * size_dataset)  # 80% for training
-    split1 = int(0.1 * size_dataset)  # 10% for training for test
+    split1 = int(0.8 * size_dataset)  # 80% for training
+    # split1 = int(0.1 * size_dataset)  # 10% for training for test
 
-    # split2 = int(0.9 * size_dataset)  # 10% for validation, 10% for testing
-    split2 = int(0.2 * size_dataset)  # 10% for validation, 10% for testing
-
-
+    split2 = int(0.9 * size_dataset)  # 10% for validation, 10% for testing
+    # split2 = int(0.2 * size_dataset)  # 10% for validation, 10% for testing
 
     train_indices = indices[:split1]
     val_indices = indices[split1:split2]
@@ -107,25 +107,25 @@ def get_data_loaders(
 
     return train_data_loader, val_data_loader, test_data_loader
 
-
+ 
 ################
 # Example usage
 ################
-if __name__ == "__main__":
-    # Example usage
-    annotations_file_path = "../data/external/data.csv"
+# if __name__ == "__main__":
+#     # Example usage
+#     annotations_file_path = "../data/external/data.csv"
 
-    transforms = v2.Compose(
-        [
-            v2.Resize(size=(640, 640)),
-            v2.ToDtype(torch.float32, scale=True),
-        ]
-    )
+#     transforms = v2.Compose(
+#         [
+#             v2.Resize(size=(640, 640)),
+#             v2.ToDtype(torch.float32, scale=True),
+#         ]
+#     )
 
-    train_loader, val_loader, test_loader = get_data_loaders(
-        annotations_path=annotations_file_path,
-        transform=transforms,
-        batch_size=16,
-        num_workers=4,
-        device="cpu",
-    )
+#     train_loader, val_loader, test_loader = get_data_loaders(
+#         annotations_path=annotations_file_path,
+#         transform=transforms,
+#         batch_size=16,
+#         num_workers=4,
+#         device="cpu",
+#     )
