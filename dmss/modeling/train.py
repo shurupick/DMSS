@@ -19,8 +19,7 @@ from dmss.train_utils import SegmentationTrainer
 @dataclass
 class Config:
     # ---------- General parameters------------
-    # project_dir: str = os.path.dirname(os.path.dirname(os.getcwd()))
-    project_dir: str = os.getcwd() #vscode
+    project_dir: str = os.getcwd()
 
     # ---------- Model parameters------------
     arch: str = "Unet"
@@ -38,8 +37,8 @@ class Config:
 
     # ---------- Training parameters------------
     learning_rate: float = 1e-3
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device: str = "mps" if torch.backends.mps.is_available() else "cpu"
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "mps" if torch.backends.mps.is_available() else "cpu"
     patience: int = 10  # Patience for early stopping
 
     # ---------- Loss parameters----------------
@@ -57,7 +56,7 @@ def generate_random_string(length):
 
 # Пример использования: генерируем строку длиной 10 символов
 class CombinedLoss(torch.nn.Module):
-    def __init__(self, alpha=1.0, beta=1.0):
+    def __init__(self, alpha=0.5, beta=0.5):
         """
         :param alpha: вес для Dice Loss
         :param beta: вес для SoftBCEWithLogitsLoss
@@ -95,9 +94,7 @@ def main(conf: Config, curr_task: Task):
 
     # Add code to initialize the optimizer and data loaders
     optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
-    # noinspection PyTypeChecker
     loss = CombinedLoss(alpha=conf.alpha, beta=conf.beta)
-    # conf.alpha * DiceLoss(mode="binary") + conf.beta * SoftBCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
         T_0=10,  # Длина начального цикла (в шагах)
@@ -107,10 +104,6 @@ def main(conf: Config, curr_task: Task):
 
     curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
     curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
-
-    # logger.report_text(
-    #     f"Optimizer Name {optimizer.__class__.__name__}"
-    # )  # TODO: дописать логирование clearml
 
     transforms = v2.Compose(
         [

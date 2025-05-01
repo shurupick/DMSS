@@ -27,7 +27,5 @@ class PolypModel(nn.Module):
         self.mean = torch.tensor(params["mean"]).view(1, 3, 1, 1).to(device)
 
     def forward(self, image):
-        # normalize image here
-        # image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
