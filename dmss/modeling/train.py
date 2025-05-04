@@ -3,7 +3,7 @@ import os
 import random
 import string
 
-from clearml import Logger, Task
+from clearml import Task
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
 from torchvision.transforms import v2, InterpolationMode
@@ -22,18 +22,16 @@ class Config:
     project_dir: str = os.getcwd()
 
     # ---------- Model parameters------------
-    arch: str = "Unet"
+    arch: str = "PSPNet"
     encoder_name: str = "resnet34"
     in_channels: int = 3
     out_classes: int = 1
 
     # ---------- Dataset parameters------------
     epochs: int = 50
-    batch_size: int = 8
+    batch_size: int = 16
     num_workers: int = 4
-    data_path: str = os.path.join(
-        project_dir, "data/external/data.csv"
-    )  # Path to your annotations
+    data_path: str = os.path.join(project_dir, "data/external/data.csv")  # Path to your annotations
 
     # ---------- Training parameters------------
     learning_rate: float = 1e-3
@@ -42,14 +40,12 @@ class Config:
     patience: int = 10  # Patience for early stopping
 
     # ---------- Loss parameters----------------
-    alpha: float = 1.0
-    beta: float = 1.0
+    alpha: float = 0.7
+    beta: float = 0.3
 
 
 def generate_random_string(length):
-    # Объединяем все буквы (строчные и прописные) и цифры
     characters = string.ascii_letters + string.digits
-    # Генерируем строку заданной длины
     random_string = "".join(random.choice(characters) for _ in range(length))
     return random_string
 
@@ -73,17 +69,12 @@ class CombinedLoss(torch.nn.Module):
         # Вычисляем значения каждого лосса
         loss_dice = self.dice_loss(preds, targets)
         loss_bce = self.soft_bce_loss(preds, targets)
-        # print(f"Dice loss: {loss_dice}")
-        # print(f"BCE loss: {loss_bce}")
-        # Возвращаем взвешенную сумму
         total_loss = self.alpha * loss_dice + self.beta * loss_bce
         return total_loss
 
 
-def main(conf: Config, curr_task: Task):
+def main(conf: Config, curr_task: Task, name_task: str):
     logger = curr_task.get_logger()
-
-    # Initialize model, optimizer, and data loaders
     model = PolypModel(
         arch=conf.arch,
         encoder_name=conf.encoder_name,
@@ -108,8 +99,8 @@ def main(conf: Config, curr_task: Task):
     curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
 
     img_tf = v2.Compose([
-        v2.Resize((640, 640)),                   # билинейно
-        v2.ToDtype(torch.float32, scale=False), # мы уже поделили на 255 вручную
+        v2.Resize((640, 640), interpolation=InterpolationMode.BILINEAR),
+        v2.ToDtype(torch.float32, scale=False),
         v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     mask_tf = v2.Compose([
@@ -136,6 +127,7 @@ def main(conf: Config, curr_task: Task):
         num_epochs=conf.epochs,
         patience=conf.patience,
         logger=logger,
+        name_tsk=name_task
     )
 
     trainer.train()
@@ -144,6 +136,7 @@ def main(conf: Config, curr_task: Task):
 if __name__ == "__main__":
     print(os.getcwd())
     task_name = generate_random_string(20)
+    print(f"Task name: {task_name}")
     task = Task.init(
         project_name="dmss",
         task_name=task_name,
@@ -151,7 +144,7 @@ if __name__ == "__main__":
     logger = task.get_logger()
     config = Config()
     task.connect(config)
-    main(config, task)
+    main(config, task, task_name)
     print("Training completed.")
     print(f"Task {task_name} has been closed.")
     task.close()

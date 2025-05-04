@@ -1,6 +1,14 @@
 # Data
 /data/
 /reports
+models/best/best_model.pth
+models/best_3Rn5ULebIklySJv0tmoZ/
+models/best_457CPikKgXPHf1EsEPE6/
+models/best_D9SROkKcvCX0Vybw6LQX/
+models/best_ImHn4h5dTDEyDXYSb2Zt/
+models/last_3Rn5ULebIklySJv0tmoZ/
+models/last_457CPikKgXPHf1EsEPE6/
+models/last_D9SROkKcvCX0Vybw6LQX/
 
 # Mac OS-specific storage files
 .DS_Store

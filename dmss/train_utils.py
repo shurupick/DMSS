@@ -27,12 +27,10 @@ class EarlyStopping:
         Args:
             patience (int, optional): Number of epochs to wait after fitness stops improving before stopping.
         """
-        self.best_fitness = 0.0  # i.e. mAP
+        self.best_fitness = 0.0
         self.best_epoch = 0
-        self.patience = patience or float(
-            "inf"
-        )  # epochs to wait after fitness stops improving to stop
-        self.possible_stop = False  # possible stop may occur next epoch
+        self.patience = patience or float("inf")
+        self.possible_stop = False
 
     def __call__(self, epoch, fitness):
         """
@@ -45,27 +43,25 @@ class EarlyStopping:
         Returns:
             (bool): True if training should stop, False otherwise
         """
-        if fitness is None:  # check if fitness=None (happens when val=False)
+        if fitness is None:
             return False
 
-        if (
-            fitness > self.best_fitness or self.best_fitness == 0
-        ):  # allow for early zero-fitness stage of training
+        if (fitness > self.best_fitness or self.best_fitness == 0):
             self.best_epoch = epoch
             self.best_fitness = fitness
-        delta = epoch - self.best_epoch  # epochs without improvement
-        self.possible_stop = delta >= (self.patience - 1)  # possible stop may occur next epoch
-        stop = delta >= self.patience  # stop training if patience exceeded
+        delta = epoch - self.best_epoch
+        self.possible_stop = delta >= (self.patience - 1)
+        stop = delta >= self.patience
 
         return stop
 
 
-def visualize(output_dir, image_filename, **images):
+def visualize(output_dir, image_filename, task_name, **images):
     """
     Plot and save a row of images.
     Ключи **images: название→numpy-массив.
     """
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(os.path.join(output_dir, task_name), exist_ok=True)
     n = len(images)
     plt.figure(figsize=(5 * n, 5))
 
@@ -80,7 +76,7 @@ def visualize(output_dir, image_filename, **images):
         else:
             plt.imshow(img)
 
-    save_path = os.path.join(output_dir, image_filename)
+    save_path = os.path.join(output_dir, task_name, image_filename)
     plt.savefig(save_path, bbox_inches="tight")
     plt.close()
 
@@ -131,6 +127,7 @@ class SegmentationTrainer:
         num_epochs: int = 10,
         patience: int = 50,
         logger: Logger = None,
+        name_tsk: str = None
     ):
         """
         :param model: модель сегментации
@@ -156,6 +153,7 @@ class SegmentationTrainer:
         self.output_dir = "./reports"  # todo: проверить пути
         self.mean = np.array([0.485, 0.456, 0.406])
         self.std = np.array([0.229, 0.224, 0.225])
+        self.name_task = name_tsk
 
     def train_epoch(self):
         self.model.train()
@@ -186,12 +184,10 @@ class SegmentationTrainer:
         tp = fp = fn = tn = 0
 
         with torch.no_grad():
-            progress_bar = tqdm(
-                self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]"
-            )
+            progress_bar = tqdm(self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]")
             for images, masks in progress_bar:
                 images = images.to(self.device)
-                masks = masks.to(self.device)  # [-1,0,1] → мы исправим ниже
+                masks = masks.to(self.device)
                 outputs = self.model(images)
                 loss = self.loss_fn(outputs, masks)
                 running_loss += loss.item()
@@ -205,24 +201,27 @@ class SegmentationTrainer:
                 prob_map = outputs.sigmoid().squeeze(1)  # [B,H,W]
                 pred_mask = (prob_map > 0.5).long()
 
-                # для каждого примера в батче — визуализация
+                # для каждого 3 примера в батче — визуализация
                 for i in range(images.size(0)):
-                    # назад к HWC float [0,1]
-                    inp = images[i].cpu().numpy().transpose(1, 2, 0)
-                    inp = np.clip(inp * self.std + self.mean, 0, 1)
+                    if i % 3 == 0:
+                        # назад к HWC float [0,1]
+                        inp = images[i].cpu().numpy().transpose(1, 2, 0)
+                        inp = np.clip(inp * self.std + self.mean, 0, 1)
+                        inp = inp[..., ::-1]
 
-                    prob = prob_map[i].cpu().numpy()  # H,W
-                    pred = pred_mask[i].cpu().numpy()  # H,W {0,1}
-                    true = masks_int[i].cpu().numpy()  # H,W {0,1}
+                        prob = prob_map[i].cpu().numpy()  # H,W
+                        pred = pred_mask[i].cpu().numpy()  # H,W {0,1}
+                        true = masks_int[i].cpu().numpy()  # H,W {0,1}
 
-                    visualize(
-                        self.output_dir,
-                        f"epoch{self.epoch}_sample{i}.png",
-                        input_image=inp,
-                        prob_map=prob,
-                        pred_mask=pred,
-                        true_mask=true,
-                    )
+                        visualize(
+                            self.output_dir,
+                            f"epoch{self.epoch}_sample{i}.png",
+                            task_name=self.name_task,
+                            input_image=inp,
+                            prob_map=prob,
+                            pred_mask=pred,
+                            true_mask=true,
+                        )
 
                 # подсчёт статистик
                 batch_tp, batch_fp, batch_fn, batch_tn = smp.metrics.get_stats(
@@ -236,63 +235,61 @@ class SegmentationTrainer:
                 progress_bar.set_postfix(val_loss=running_loss / (progress_bar.n + 1e-7))
 
         metrics = _calculate_metrics(tp, fp, fn, tn)
+        print(f"Validation F1 = {metrics['f1_score']}")
         return running_loss / len(self.val_loader), metrics
 
     def train(self):
-        self.best_val_loss = float("inf")
+        # self.best_val_loss = float("inf")
+        self.best_f1 = 0
         self.epoch = 0
 
         for epoch in range(1, self.num_epochs + 1):
             self.epoch = epoch
-
             # ------- Train -------
             train_loss = self.train_epoch()
-
             # ------- Validate -------
-            final_epoch = epoch + 1 >= self.num_epochs
+            final_epoch = epoch >= self.num_epochs
             val_loss, metrics = self.validate()
-
             # --------Log losses--------
             self.logger.report_scalar("Train", "loss", iteration=self.epoch, value=train_loss)
             self.logger.report_scalar("Valid", "loss", iteration=self.epoch, value=val_loss)
             log_metrics_to_clearml(metrics, self.epoch, self.logger)
 
-            if (
-                val_loss < self.best_val_loss
-            ):  # Остановку может быть стоит делать не по лоссу, а по метрике
-                self.best_val_loss = val_loss
-                self._save_model("best")
-                print(f"Best validation loss updated to {val_loss:.4f}")
+            # if (
+            #     val_loss < self.best_val_loss
+            # ):  # Остановку может быть стоит делать не по лоссу, а по метрике
+            #     self.best_val_loss = val_loss
+            #     self._save_model("best")
+            #     print(f"Best validation loss updated to {val_loss:.4f}")
 
-            self.stop |= self.stopper(epoch, val_loss)
+            if metrics['f1_score'] > self.best_f1:
+                self.best_f1 = metrics['f1_score']
+                self._save_model("best", task_name=self.name_task)
+                print(f"Best f1 updated to {metrics['f1_score']:.4f}")
+            self.stop |= self.stopper(epoch, metrics['f1_score'])
 
             # ------- Save model -------
             if final_epoch:
-                self._save_model("last")
-                print(f"Final epoch reached. Model saved.")
+                self._save_model("last", task_name=self.name_task)
+                print("Final epoch reached. Model saved.")
 
             # ------- Early stopping -------
             if self.stop:
+                self._save_model("last", task_name=self.name_task)
                 print("Early stopping triggered.")
                 break
 
-            print(
-                f"Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n"
-            )
+            print(f"Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n")
 
-    def _save_model(self, mode: str):
+    def _save_model(self, mode: str, task_name):
         """
         mode: 'best' or 'last'
         """
         if mode == "best":
-            os.makedirs(os.path.join(self.checkpoint_dir, "best"), exist_ok=True)
-            torch.save(
-                self.model.state_dict(), os.path.join(self.checkpoint_dir, "best/best_model.pth")
-            )
-            print(f"Best model saved.")
+            os.makedirs(os.path.join(self.checkpoint_dir, f"best_{task_name}"), exist_ok=True)
+            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, f"best_{task_name}/best_model.pth"))
+            print("Best model saved.")
         elif mode == "last":
-            os.makedirs(os.path.join(self.checkpoint_dir, "last"), exist_ok=True)
-            torch.save(
-                self.model.state_dict(), os.path.join(self.checkpoint_dir, "last/last_model.pth")
-            )
-            print(f"Final epoch reached. Last model saved.")
+            os.makedirs(os.path.join(self.checkpoint_dir, f"last_{task_name}"), exist_ok=True)
+            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, f"last_{task_name}/last_model.pth"))
+            print("Final epoch reached. Last model saved.")
