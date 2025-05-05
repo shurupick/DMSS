@@ -22,7 +22,7 @@ class Config:
     project_dir: str = os.getcwd()
 
     # ---------- Model parameters------------
-    arch: str = "PSPNet"
+    arch: str = "DeepLabV3"
     encoder_name: str = "resnet34"
     in_channels: int = 3
     out_classes: int = 1
