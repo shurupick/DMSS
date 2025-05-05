@@ -6,7 +6,7 @@ import string
 from clearml import Task
 from segmentation_models_pytorch.losses import DiceLoss, SoftBCEWithLogitsLoss
 import torch
-from torchvision.transforms import v2, InterpolationMode
+from torchvision.transforms import InterpolationMode, v2
 
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
@@ -31,7 +31,9 @@ class Config:
     epochs: int = 50
     batch_size: int = 16
     num_workers: int = 4
-    data_path: str = os.path.join(project_dir, "data/external/data.csv")  # Path to your annotations
+    data_path: str = os.path.join(
+        project_dir, "data/external/data.csv"
+    )  # Path to your annotations
 
     # ---------- Training parameters------------
     learning_rate: float = 1e-3
@@ -98,15 +100,19 @@ def main(conf: Config, curr_task: Task, name_task: str):
     curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
     curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
 
-    img_tf = v2.Compose([
-        v2.Resize((640, 640), interpolation=InterpolationMode.BILINEAR),
-        v2.ToDtype(torch.float32, scale=False),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    mask_tf = v2.Compose([
-        v2.Resize((640, 640), interpolation=InterpolationMode.NEAREST),
-        v2.ToDtype(torch.float32, scale=False)
-    ])
+    img_tf = v2.Compose(
+        [
+            v2.Resize((640, 640), interpolation=InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=False),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+    mask_tf = v2.Compose(
+        [
+            v2.Resize((640, 640), interpolation=InterpolationMode.NEAREST),
+            v2.ToDtype(torch.float32, scale=False),
+        ]
+    )
 
     train_loader, val_loader, test_loader = get_data_loaders(
         annotations_path=conf.data_path,
@@ -127,7 +133,7 @@ def main(conf: Config, curr_task: Task, name_task: str):
         num_epochs=conf.epochs,
         patience=conf.patience,
         logger=logger,
-        name_tsk=name_task
+        name_tsk=name_task,
     )
 
     trainer.train()

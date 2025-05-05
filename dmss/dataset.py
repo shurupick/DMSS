@@ -80,7 +80,7 @@ def get_data_loaders(
     # indicies dataset
     size_dataset = len(main_dataset)
     indices = list(range(size_dataset))
-    
+
     split1 = int(0.8 * size_dataset)  # 80% for training
     split2 = int(0.9 * size_dataset)  # 10% for validation, 10% for testing
 
@@ -105,7 +105,7 @@ def get_data_loaders(
 
     return train_data_loader, val_data_loader, test_data_loader
 
- 
+
 ################
 # Example usage
 ################

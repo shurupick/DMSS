@@ -46,7 +46,7 @@ class EarlyStopping:
         if fitness is None:
             return False
 
-        if (fitness > self.best_fitness or self.best_fitness == 0):
+        if fitness > self.best_fitness or self.best_fitness == 0:
             self.best_epoch = epoch
             self.best_fitness = fitness
         delta = epoch - self.best_epoch
@@ -127,7 +127,7 @@ class SegmentationTrainer:
         num_epochs: int = 10,
         patience: int = 50,
         logger: Logger = None,
-        name_tsk: str = None
+        name_tsk: str = None,
     ):
         """
         :param model: модель сегментации
@@ -184,7 +184,9 @@ class SegmentationTrainer:
         tp = fp = fn = tn = 0
 
         with torch.no_grad():
-            progress_bar = tqdm(self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]")
+            progress_bar = tqdm(
+                self.val_loader, desc=f"Epoch {self.epoch}/{self.num_epochs} [Valid]"
+            )
             for images, masks in progress_bar:
                 images = images.to(self.device)
                 masks = masks.to(self.device)
@@ -262,11 +264,11 @@ class SegmentationTrainer:
             #     self._save_model("best")
             #     print(f"Best validation loss updated to {val_loss:.4f}")
 
-            if metrics['f1_score'] > self.best_f1:
-                self.best_f1 = metrics['f1_score']
+            if metrics["f1_score"] > self.best_f1:
+                self.best_f1 = metrics["f1_score"]
                 self._save_model("best", task_name=self.name_task)
                 print(f"Best f1 updated to {metrics['f1_score']:.4f}")
-            self.stop |= self.stopper(epoch, metrics['f1_score'])
+            self.stop |= self.stopper(epoch, metrics["f1_score"])
 
             # ------- Save model -------
             if final_epoch:
@@ -279,7 +281,9 @@ class SegmentationTrainer:
                 print("Early stopping triggered.")
                 break
 
-            print(f"Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n")
+            print(
+                f"Epoch {epoch}  Train loss: {train_loss:.4f}, Validation loss: {val_loss:.4f}\n"
+            )
 
     def _save_model(self, mode: str, task_name):
         """
@@ -287,9 +291,15 @@ class SegmentationTrainer:
         """
         if mode == "best":
             os.makedirs(os.path.join(self.checkpoint_dir, f"best_{task_name}"), exist_ok=True)
-            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, f"best_{task_name}/best_model.pth"))
+            torch.save(
+                self.model.state_dict(),
+                os.path.join(self.checkpoint_dir, f"best_{task_name}/best_model.pth"),
+            )
             print("Best model saved.")
         elif mode == "last":
             os.makedirs(os.path.join(self.checkpoint_dir, f"last_{task_name}"), exist_ok=True)
-            torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, f"last_{task_name}/last_model.pth"))
+            torch.save(
+                self.model.state_dict(),
+                os.path.join(self.checkpoint_dir, f"last_{task_name}/last_model.pth"),
+            )
             print("Final epoch reached. Last model saved.")
