@@ -22,15 +22,15 @@ class Config:
     project_dir: str = os.getcwd()
 
     # ---------- Model parameters------------
-    arch: str = "DeepLabV3"
-    encoder_name: str = "resnet34"
+    arch: str = "Unet"
+    encoder_name: str = "efficientnet-b5"
     in_channels: int = 3
     out_classes: int = 1
 
     # ---------- Dataset parameters------------
     epochs: int = 50
-    batch_size: int = 16
-    num_workers: int = 4
+    batch_size: int = 8
+    num_workers: int = 2
     data_path: str = os.path.join(
         project_dir, "data/external/data.csv"
     )  # Path to your annotations
