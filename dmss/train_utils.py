@@ -164,8 +164,6 @@ class SegmentationTrainer:
         for images, masks in progress_bar:
             # Переносим данные на выбранное устройство
             images, masks = images.to(self.device), masks.to(self.device)
-            # print(images)
-            # print(masks)
             self.optimizer.zero_grad()
             outputs = self.model(images)
             loss = self.loss_fn(outputs, masks)
