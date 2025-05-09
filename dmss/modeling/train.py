@@ -54,6 +54,7 @@ class Config:
     # --------- parameters Stable Diffusion ----------
     guidance_scale: float = 7.5
     promt: str = "a polyp in colon, medical segmentation image"
+    num_inference_steps: int = 100
 
     mode: str = "diffusion"
 
