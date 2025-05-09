@@ -10,20 +10,20 @@ from dmss.train_utils import (
     visualize,
     _calculate_metrics,
     log_metrics_to_clearml,
-    EarlyStopping
+    EarlyStopping,
 )
 import segmentation_models_pytorch as smp
 
 
 class DiffusionSegmentationTrainer:
-    def __init__(
-        self,
-        train_loader,
-        val_loader,
-        cfg,
-        logger,
-        task_name="diffusion_lora_seg",
-    ):
+    def __init__(self,
+                 train_loader,
+                 val_loader,
+                 cfg,
+                 loss_fn,
+                 logger,
+                 task_name="diffusion_lora_seg"):
+        
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.cfg = cfg
@@ -32,30 +32,27 @@ class DiffusionSegmentationTrainer:
         self.device = cfg.device
         self.output_dir = "./reports"
         self.checkpoint_dir = "./models"
-        self.prompt = cfg.prompt
+        self.prompt = cfg.promt
+        self.loss = loss_fn
 
-        self.mean = np.array([0.485, 0.456, 0.406])
-        self.std = np.array([0.229, 0.224, 0.225])
-
-        # Load base pipeline
+        # Load ControlNet + Stable Diffusion pipeline
         controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-seg",
-            torch_dtype=torch.float16
+            "lllyasviel/sd-controlnet-seg", torch_dtype=torch.float16
         )
         self.pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5",
             controlnet=controlnet,
             torch_dtype=torch.float16,
-            safety_checker=None
+            safety_checker=None,
         ).to(self.device)
 
-        # Apply LoRA
+        # Apply LoRA to UNet
         lora_config = LoraConfig(
             r=cfg.lora_r,
             lora_alpha=cfg.lora_alpha,
             lora_dropout=cfg.lora_dropout,
             bias="none",
-            target_modules=["to_q", "to_k"]
+            target_modules=["to_q", "to_k"],
         )
         self.pipe.unet = get_peft_model(self.pipe.unet, lora_config)
         self.pipe.unet.train()
@@ -70,10 +67,10 @@ class DiffusionSegmentationTrainer:
         for epoch in range(1, self.epochs + 1):
             self.epoch = epoch
             self.pipe.unet.train()
-            train_loss = 0
+            train_loss = 0.0
+
             for images, masks in tqdm(self.train_loader, desc=f"Epoch {epoch} [Train]"):
-                images = images.to(self.device)
-                masks = masks.to(self.device)
+                images, masks = images.to(self.device), masks.to(self.device)
 
                 preds = []
                 for img in images:
@@ -85,22 +82,25 @@ class DiffusionSegmentationTrainer:
                         num_inference_steps=20,
                     ).images[0]
 
-                    mask_tensor = torch.tensor(np.array(out)).float() / 255.0  # [H, W]
+                    mask_tensor = torch.tensor(np.array(out)).float() / 255.0  # [H,W] ∈ [0,1]
                     if mask_tensor.ndim == 3:
                         mask_tensor = mask_tensor.mean(dim=-1)  # grayscale
                     mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
                     mask_tensor = F.interpolate(mask_tensor, size=img.shape[1:], mode="bilinear")
                     preds.append(mask_tensor)
 
-                preds = torch.cat(preds, dim=0).to(self.device)  # [B,1,H,W]
-                loss = F.binary_cross_entropy(preds, masks)
+                preds = torch.cat(preds, dim=0).to(self.device)
+                # loss = F.binary_cross_entropy(preds, masks)
+                loss = self.loss(preds, masks)
+
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
                 train_loss += loss.item()
 
-            train_loss /= len(self.train_loader)
-            self.logger.report_scalar("Train", "loss", iteration=epoch, value=train_loss)
+            avg_train_loss = train_loss / len(self.train_loader)
+            self.logger.report_scalar("Train", "loss", iteration=epoch, value=avg_train_loss)
 
             val_loss, metrics = self.validate()
             self.logger.report_scalar("Valid", "loss", iteration=epoch, value=val_loss)
@@ -118,13 +118,12 @@ class DiffusionSegmentationTrainer:
 
     def validate(self):
         self.pipe.unet.eval()
-        val_loss = 0
+        val_loss = 0.0
         tp = fp = fn = tn = 0
 
         with torch.no_grad():
             for images, masks in tqdm(self.val_loader, desc=f"Epoch {self.epoch} [Valid]"):
-                images = images.to(self.device)
-                masks = masks.to(self.device)
+                images, masks = images.to(self.device), masks.to(self.device)
 
                 preds = []
                 for img in images:
@@ -144,30 +143,24 @@ class DiffusionSegmentationTrainer:
                     preds.append(mask_tensor)
 
                 preds = torch.cat(preds, dim=0).to(self.device)
-                loss = F.binary_cross_entropy(preds, masks)
+                # loss = F.binary_cross_entropy(preds, masks)
+                loss = self.loss(preds, masks)
                 val_loss += loss.item()
 
-                prob_map = preds.sigmoid().squeeze(1)
+                prob_map = preds.squeeze(1)
                 pred_mask = (prob_map > 0.5).long()
                 true_mask = (masks > 0.5).long().squeeze(1)
 
                 for i in range(images.size(0)):
                     if i % 3 == 0:
-                        inp = images[i].cpu().numpy().transpose(1, 2, 0)
-                        inp = np.clip(inp * self.std + self.mean, 0, 1)[..., ::-1]
-
-                        prob = prob_map[i].cpu().numpy()
-                        pred = pred_mask[i].cpu().numpy()
-                        true = true_mask[i].cpu().numpy()
-
                         visualize(
                             self.output_dir,
                             f"epoch{self.epoch}_sample{i}.png",
                             task_name=self.task_name,
-                            input_image=inp,
-                            prob_map=prob,
-                            pred_mask=pred,
-                            true_mask=true,
+                            input_image=images[i].cpu().permute(1, 2, 0).numpy(),
+                            prob_map=prob_map[i].cpu().numpy(),
+                            pred_mask=pred_mask[i].cpu().numpy(),
+                            true_mask=true_mask[i].cpu().numpy(),
                         )
 
                 stats = smp.metrics.get_stats(pred_mask, true_mask, mode="binary")
@@ -182,5 +175,5 @@ class DiffusionSegmentationTrainer:
     def _save_model(self, mode: str):
         path = os.path.join(self.checkpoint_dir, f"{mode}_{self.task_name}")
         os.makedirs(path, exist_ok=True)
-        self.pipe.unet.save_pretrained(path)
-        print(f"{mode.capitalize()} model saved to {path}")
+        self.pipe.save_pretrained(path)
+        print(f"{mode.capitalize()} pipeline saved to {path}")

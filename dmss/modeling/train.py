@@ -11,6 +11,7 @@ from torchvision.transforms import InterpolationMode, v2
 from dmss.dataset import get_data_loaders
 from dmss.models import PolypModel
 from dmss.train_utils import SegmentationTrainer
+from dmss.Lora_stable_diffusion_util import DiffusionSegmentationTrainer
 
 
 # ----------------------------
@@ -22,15 +23,15 @@ class Config:
     project_dir: str = os.getcwd()
 
     # ---------- Model parameters------------
-    arch: str = "PSPNet"
+    arch: str = "Segformer"
     encoder_name: str = "efficientnet-b5"
     in_channels: int = 3
     out_classes: int = 1
 
     # ---------- Dataset parameters------------
     epochs: int = 50
-    batch_size: int = 32
-    num_workers: int = 4
+    batch_size: int = 2
+    num_workers: int = 2
     data_path: str = os.path.join(
         project_dir, "data/external/data.csv"
     )  # Path to your annotations
@@ -44,6 +45,17 @@ class Config:
     # ---------- Loss parameters----------------
     alpha: float = 0.7
     beta: float = 0.3
+
+    # --------- LoRA parameters ----------
+    lora_r: int = 4
+    lora_alpha: float = 16
+    lora_dropout: float = 0.1
+
+    # --------- parameters Stable Diffusion ----------
+    guidance_scale: float = 7.5
+    promt: str = "a polyp in colon, medical segmentation image"
+
+    mode: str = "diffusion"
 
 
 def generate_random_string(length):
@@ -77,29 +89,7 @@ class CombinedLoss(torch.nn.Module):
 
 def main(conf: Config, curr_task: Task, name_task: str):
     logger = curr_task.get_logger()
-    model = PolypModel(
-        arch=conf.arch,
-        encoder_name=conf.encoder_name,
-        in_channels=conf.in_channels,
-        out_classes=conf.out_classes,
-        device=conf.device,
-    )
-
-    model.to(conf.device)
-
-    # Add code to initialize the optimizer and data loaders
-    optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
     loss = CombinedLoss(alpha=conf.alpha, beta=conf.beta)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer,
-        T_0=10,  # Длина начального цикла (в шагах)
-        T_mult=1,  # Увеличение длины цикла после каждого перезапуска
-        eta_min=1e-7,  # Минимальный learning rate
-    )
-
-    curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
-    curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
-
     img_tf = v2.Compose(
         [
             v2.Resize((640, 640), interpolation=InterpolationMode.BILINEAR),
@@ -122,21 +112,57 @@ def main(conf: Config, curr_task: Task, name_task: str):
         num_workers=conf.num_workers,
         device=conf.device,
     )
-    trainer = SegmentationTrainer(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        loss_fn=loss,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        device=conf.device,
-        num_epochs=conf.epochs,
-        patience=conf.patience,
-        logger=logger,
-        name_tsk=name_task,
-    )
+    if conf.mode == "diffusion":
+        print("[INFO] Запуск диффузионной модели (Stable Diffusion + ControlNet + LoRA)")
+        trainer = DiffusionSegmentationTrainer(
+            train_loader=train_loader,
+            val_loader=val_loader,
+            cfg=conf,
+            loss_fn=loss,
+            logger=logger,
+            task_name=name_task
+        )
+        trainer.train()
+    elif conf.mode == "classic":
+        model = PolypModel(
+            arch=conf.arch,
+            encoder_name=conf.encoder_name,
+            in_channels=conf.in_channels,
+            out_classes=conf.out_classes,
+            device=conf.device,
+        )
 
-    trainer.train()
+        model.to(conf.device)
+
+        # Add code to initialize the optimizer and data loaders
+        optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=10,  # Длина начального цикла (в шагах)
+            T_mult=1,  # Увеличение длины цикла после каждого перезапуска
+            eta_min=1e-7,  # Минимальный learning rate
+        )
+
+        curr_task.set_parameter("Optimizer", optimizer.__class__.__name__)
+        curr_task.set_parameter("Scheduler", scheduler.__class__.__name__)
+
+        trainer = SegmentationTrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            loss_fn=loss,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            device=conf.device,
+            num_epochs=conf.epochs,
+            patience=conf.patience,
+            logger=logger,
+            name_tsk=name_task,
+        )
+
+        trainer.train()
+    else:
+        raise ValueError(f"Unknown model_type: {conf.model_type}")
 
 
 if __name__ == "__main__":
