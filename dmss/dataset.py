@@ -44,8 +44,9 @@ class PolypDataset(Dataset):
             raise FileNotFoundError(f"The mask file {mask_path} does not exist.")
 
         # Load image and mask from paths
-        image = cv.imread(img_path, cv.COLOR_BGR2RGB)
-        mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)  # Load mask in grayscale mode
+        image = cv.imread(img_path)
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)
 
         image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
         mask = torch.from_numpy(mask).unsqueeze(0).float() / 255.0

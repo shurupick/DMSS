@@ -30,7 +30,7 @@ class Config:
 
     # ---------- Dataset parameters------------
     epochs: int = 50
-    batch_size: int = 2
+    batch_size: int = 46
     num_workers: int = 2
     data_path: str = os.path.join(
         project_dir, "data/external/data.csv"
@@ -54,7 +54,7 @@ class Config:
     # --------- parameters Stable Diffusion ----------
     guidance_scale: float = 7.5
     promt: str = "a polyp in colon, medical segmentation image"
-    num_inference_steps: int = 100
+    num_inference_steps: int = 20
 
     mode: str = "diffusion"
 
@@ -93,14 +93,14 @@ def main(conf: Config, curr_task: Task, name_task: str):
     loss = CombinedLoss(alpha=conf.alpha, beta=conf.beta)
     img_tf = v2.Compose(
         [
-            v2.Resize((640, 640), interpolation=InterpolationMode.BILINEAR),
+            v2.Resize((512, 512), interpolation=InterpolationMode.BILINEAR),
             v2.ToDtype(torch.float32, scale=False),
             v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
     mask_tf = v2.Compose(
         [
-            v2.Resize((640, 640), interpolation=InterpolationMode.NEAREST),
+            v2.Resize((512, 512), interpolation=InterpolationMode.NEAREST),
             v2.ToDtype(torch.float32, scale=False),
         ]
     )
